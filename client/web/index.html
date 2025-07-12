@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>md5-fs 管理界面</title>
+    <style>
+        body { font-family: 'Segoe UI', 'PingFang SC', Arial, sans-serif; margin: 2em; background: #f7f7f9; }
+        #main-box { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #0001; padding: 2em; max-width: 600px; margin: auto; }
+        h1 { text-align: center; color: #2c3e50; }
+        #dirs { margin-top: 1em; }
+        .dir-item { margin-bottom: 0.5em; background: #f0f4f8; border-radius: 4px; padding: 0.5em 1em; display: flex; align-items: center; justify-content: space-between; }
+        .dir-item button { background: #e74c3c; color: #fff; border: none; border-radius: 3px; padding: 0.2em 0.8em; cursor: pointer; }
+        .dir-item button:hover { background: #c0392b; }
+        #dirInput { width: 70%; padding: 0.5em; border: 1px solid #ccc; border-radius: 4px; }
+        #addBtn { background: #3498db; color: #fff; border: none; border-radius: 4px; padding: 0.5em 1.5em; margin-left: 1em; cursor: pointer; }
+        #addBtn:hover { background: #217dbb; }
+        .status { margin-top: 2em; color: #555; text-align: center; font-size: 1.1em; }
+        .progress-bar-bg { width: 100%; background: #e0e0e0; border-radius: 8px; height: 24px; margin-top: 1em; }
+        .progress-bar { height: 100%; background: linear-gradient(90deg, #4caf50, #2196f3); border-radius: 8px; transition: width 0.4s; text-align: center; color: #fff; font-weight: bold; line-height: 24px; }
+    </style>
+</head>
+<body>
+    <div id="main-box">
+        <h1>md5-fs 目录监控管理</h1>
+        <div style="display: flex; gap: 1em; align-items: center; justify-content: center; margin-bottom: 1em;">
+            <input type="text" id="dirInput" placeholder="输入目录路径">
+            <button id="addBtn" onclick="addDir()">添加目录</button>
+        </div>
+        <div style="margin-top:2em; padding:1em; background:#f8fafc; border-radius:6px; box-shadow:0 1px 3px #0001;">
+            <div style="display:flex; gap:1em; align-items:center;">
+                <input type="text" id="pathInput" placeholder="输入本地文件完整路径" style="flex:1; padding:0.5em; border:1px solid #ccc; border-radius:4px;">
+                <button id="convertBtn" style="background:#27ae60; color:#fff; border:none; border-radius:4px; padding:0.5em 1.5em; cursor:pointer;" onclick="convertPath()">地址转换</button>
+            </div>
+            <div id="convertResult" style="margin-top:1em; color:#333; font-size:1em;"></div>
+        </div>
+        <div id="fileTreeBox" style="margin-top:2em; background:#f8fafc; border-radius:6px; box-shadow:0 1px 3px #0001; padding:1em;">
+            <div style="display:flex; align-items:center; gap:1em; margin-bottom:0.5em;">
+                <input type="text" id="fileSearch" placeholder="搜索文件名/路径" style="flex:1; padding:0.5em; border:1px solid #ccc; border-radius:4px;">
+                <button onclick="refreshFileTree()" style="background:#3498db; color:#fff; border:none; border-radius:4px; padding:0.5em 1.5em; cursor:pointer;">刷新</button>
+            </div>
+            <div id="fileTree" style="max-height:350px; overflow:auto; font-size:0.98em;"></div>
+        </div>
+        <div id="dirs"></div>
+        <div class="status" id="status"></div>
+        <div class="progress-bar-bg" style="display:none;" id="progressBg">
+            <div class="progress-bar" id="progressBar" style="width:0%">0%</div>
+        </div>
+    </div>
+    <script>
+        function fetchDirs() {
+            fetch('/api/directories').then(r => r.json()).then(list => {
+                const dirs = document.getElementById('dirs');
+                dirs.innerHTML = '';
+                list.forEach(path => {
+                    const div = document.createElement('div');
+                    div.className = 'dir-item';
+                    div.innerHTML = `<span>${path}</span>`;
+                    const btn = document.createElement('button');
+                    btn.textContent = '删除';
+                    btn.onclick = () => delDir(path);
+                    div.appendChild(btn);
+                    dirs.appendChild(div);
+                });
+            });
+        }
+        function addDir() {
+            const path = document.getElementById('dirInput').value;
+            if (!path) return;
+            fetch('/api/directories', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({path})
+            }).then(() => {
+                document.getElementById('dirInput').value = '';
+                fetchDirs();
+            });
+        }
+        function delDir(path) {
+            fetch('/api/directories', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({path})
+            }).then(fetchDirs);
+        }
+        function fetchStatus() {
+            fetch('/api/status').then(r => r.json()).then(s => {
+                const statusDiv = document.getElementById('status');
+                const progressBg = document.getElementById('progressBg');
+                const progressBar = document.getElementById('progressBar');
+                if (s.indexing && s.indexingTotal > 0) {
+                    progressBg.style.display = '';
+                    let percent = Math.floor((s.indexingDone / s.indexingTotal) * 100);
+                    if (percent > 100) percent = 100;
+                    progressBar.style.width = percent + '%';
+                    progressBar.textContent = percent + '%';
+                    statusDiv.textContent = `索引中：${s.indexingDone} / ${s.indexingTotal} 文件`;
+                } else {
+                    progressBg.style.display = 'none';
+                    statusDiv.textContent = `已索引文件数: ${s.fileCount}`;
+                }
+            });
+        }
+        function convertPath() {
+            const path = document.getElementById('pathInput').value;
+            const resultDiv = document.getElementById('convertResult');
+            if (!path) {
+                resultDiv.textContent = '请输入本地文件路径';
+                resultDiv.style.color = '#e74c3c';
+                return;
+            }
+            resultDiv.textContent = '正在转换...';
+            resultDiv.style.color = '#333';
+            fetch('/api/path2url', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({path})
+            })
+            .then(async r => {
+                if (!r.ok) {
+                    const msg = await r.text();
+                    resultDiv.textContent = '转换失败：' + msg;
+                    resultDiv.style.color = '#e74c3c';
+                    return;
+                }
+                return r.json();
+            })
+            .then(data => {
+                if (!data) return;
+                resultDiv.innerHTML = `转换成功：<br>MD5: <b>${data.md5}</b><br>URL: <a href="${data.url}" target="_blank">${data.url}</a>`;
+                resultDiv.style.color = '#27ae60';
+            })
+            .catch(e => {
+                resultDiv.textContent = '请求出错';
+                resultDiv.style.color = '#e74c3c';
+            });
+        }
+        // 树状文件列表
+        let allFiles = [];
+        let treeCollapseState = {};
+        function refreshFileTree() {
+            fetch('/api/files').then(r => r.json()).then(files => {
+                allFiles = files;
+                treeCollapseState = {}; // 刷新时重置折叠状态
+                renderFileTree();
+            });
+        }
+        function renderFileTree() {
+            const search = document.getElementById('fileSearch').value.trim().toLowerCase();
+            // 构建树结构
+            const tree = {};
+            allFiles.forEach(f => {
+                if (search && !f.path.toLowerCase().includes(search) && !f.filename.toLowerCase().includes(search)) return;
+                const parts = f.path.split('/').filter(Boolean);
+                let node = tree;
+                for (let i = 0; i < parts.length - 1; i++) {
+                    if (!node[parts[i]]) node[parts[i]] = {};
+                    node = node[parts[i]];
+                }
+                if (!node['__files']) node['__files'] = [];
+                node['__files'].push(f);
+            });
+            const fileTreeDiv = document.getElementById('fileTree');
+            fileTreeDiv.innerHTML = buildTreeHtml(tree, '', '');
+        }
+        function buildTreeHtml(node, prefix, parentKey) {
+            let html = '<ul style="list-style:none; margin:0 0 0 1em; padding:0">';
+            for (const key in node) {
+                if (key === '__files') {
+                    node['__files'].forEach(f => {
+                        const url = `/md5?hash=${f.md5}`;
+                        html += `<li style='margin-bottom:2px;'><span title='${f.path}' style='color:#555;'>📄 ${f.filename}</span> <a href='${url}' target='_blank' style='color:#3498db; text-decoration:underline; font-size:0.95em;'>打开</a> <button onclick=\"copyUrl('${url}')\" style='background:#eee; border:none; border-radius:3px; padding:0 0.5em; margin-left:0.5em; cursor:pointer;'>复制</button></li>`;
+                    });
+                } else {
+                    const fullKey = (parentKey ? parentKey + '/' : '') + key;
+                    const collapsed = treeCollapseState[fullKey];
+                    html += `<li><span style='color:#888; cursor:pointer; user-select:none;' onclick=\"toggleCollapse('${fullKey}')\">${collapsed ? '▶' : '▼'} 📁 ${key}</span>`;
+                    if (!collapsed) {
+                        html += buildTreeHtml(node[key], prefix + '/' + key, fullKey);
+                    }
+                    html += '</li>';
+                }
+            }
+            html += '</ul>';
+            return html;
+        }
+        function toggleCollapse(key) {
+            treeCollapseState[key] = !treeCollapseState[key];
+            renderFileTree();
+        }
+        function copyUrl(url) {
+            navigator.clipboard.writeText(window.location.origin + url);
+            alert('已复制URL: ' + window.location.origin + url);
+        }
+        document.getElementById('fileSearch').addEventListener('input', renderFileTree);
+        fetchDirs();
+        fetchStatus();
+        setInterval(fetchStatus, 1500);
+        refreshFileTree(); // Initial refresh
+    </script>
+</body>
+</html>

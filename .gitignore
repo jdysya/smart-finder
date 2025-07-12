@@ -1,0 +1,44 @@
+# Go构建产物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+build/
+dist/
+
+# 测试文件
+*.test
+*.out
+
+# 依赖目录
+vendor/
+
+# IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 日志文件
+*.log
+
+# 临时文件
+tmp/
+temp/
+
+# 环境变量文件
+.env
+.env.local
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 配置文件（生产环境）
+gateway/config/config.prod.yaml 
+
+
+client/data/md5fs.db
