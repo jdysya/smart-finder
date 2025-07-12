@@ -10,7 +10,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/spf13/viper"
 
-	"md5-fs/gateway/internal/templates"
+	"smart-finder/gateway/internal/templates"
 )
 
 type Config struct {

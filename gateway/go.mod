@@ -1,4 +1,4 @@
-module md5-fs/gateway
+module smart-finder/gateway
 
 go 1.24
 

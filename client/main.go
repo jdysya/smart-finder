@@ -11,9 +11,9 @@ import (
 
 	"embed"
 	"io/fs"
-	"md5-fs/client/internal/db"
-	"md5-fs/client/internal/indexer"
-	"md5-fs/client/internal/utils"
+	"smart-finder/client/internal/db"
+	"smart-finder/client/internal/indexer"
+	"smart-finder/client/internal/utils"
 )
 
 var (

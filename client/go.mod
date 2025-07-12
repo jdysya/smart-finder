@@ -1,4 +1,4 @@
-module md5-fs/client
+module smart-finder/client
 
 go 1.24.0
 

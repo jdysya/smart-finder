@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"md5-fs/client/internal/core"
+	"smart-finder/client/internal/core"
 )
 
 var (

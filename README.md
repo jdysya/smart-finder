@@ -12,7 +12,7 @@
 ## 项目结构
 
 ```
-md5-fs/
+smart-finder/
 ├── README.md
 ├── go.work                    # Go工作区文件
 ├── .gitignore
@@ -124,11 +124,11 @@ go run main.go
 ```
 
 这将生成以下文件：
-- `build/md5-fs-client-windows.exe` - Windows客户端
-- `build/md5-fs-client-darwin` - macOS客户端  
-- `build/md5-fs-client-linux` - Linux客户端
-- `build/md5-fs-gateway-linux` - Linux服务端
-- `build/md5-fs-gateway-windows.exe` - Windows服务端
+- `build/smart-finder-client-windows.exe` - Windows客户端
+- `build/smart-finder-client-darwin` - macOS客户端  
+- `build/smart-finder-client-linux` - Linux客户端
+- `build/smart-finder-gateway-linux` - Linux服务端
+- `build/smart-finder-gateway-windows.exe` - Windows服务端
 
 ### 部署
 ```bash

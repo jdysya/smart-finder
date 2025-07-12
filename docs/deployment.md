@@ -16,11 +16,11 @@
 ```bash
 # 构建客户端 (Windows)
 cd client
-GOOS=windows GOARCH=amd64 go build -o ../build/md5-fs-client-windows.exe .
+GOOS=windows GOARCH=amd64 go build -o ../build/smart-finder-client-windows.exe .
 
 # 构建服务端 (Linux)
 cd gateway
-GOOS=linux GOARCH=amd64 go build -o ../build/md5-fs-gateway-linux .
+GOOS=linux GOARCH=amd64 go build -o ../build/smart-finder-gateway-linux .
 ```
 
 ## 部署
