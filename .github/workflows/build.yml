@@ -71,7 +71,7 @@ jobs:
         CGO_ENABLED: ${{ env.CGO_ENABLED }}
       run: |
         cd client
-        go build -ldflags="-s -w" -o "smart-finder-client-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}" ./main.go
+        go build -ldflags="-s -w" -o "smart-finder-client-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}" .
 
     - name: Upload Client Artifact
       uses: actions/upload-artifact@v4
@@ -137,7 +137,7 @@ jobs:
         CGO_ENABLED: ${{ env.CGO_ENABLED }}
       run: |
         cd gateway
-        go build -ldflags="-s -w" -o "smart-finder-gateway-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}" ./main.go
+        go build -ldflags="-s -w" -o "smart-finder-gateway-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}" .
 
     - name: Upload Gateway Artifact
       uses: actions/upload-artifact@v4

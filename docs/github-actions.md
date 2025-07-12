@@ -77,6 +77,26 @@
 2. **跨平台构建**：使用Go的交叉编译功能，在Linux上构建Windows和macOS版本
 3. **文件大小优化**：使用 `-ldflags="-s -w"` 来减小可执行文件大小
 4. **缓存优化**：使用GitHub Actions的Go模块缓存来加速构建
+5. **构建命令**：使用 `go build .` 而不是 `go build ./main.go` 来确保包含所有Go文件
+
+## 问题解决
+
+### `getPublicFileServer` 未定义错误
+
+如果遇到 `undefined: getPublicFileServer` 错误，这是因为构建命令没有包含所有Go文件。解决方案：
+
+1. **使用正确的构建命令**：
+   ```bash
+   # 错误的方式
+   go build ./main.go
+   
+   # 正确的方式
+   go build .
+   ```
+
+2. **确保所有Go文件在同一包中**：`static.go` 和 `main.go` 都应该是 `package main`
+
+3. **检查文件位置**：确保 `static.go` 文件在正确的目录中
 
 ## 故障排除
 

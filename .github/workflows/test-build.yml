@@ -1,0 +1,54 @@
+name: Test Build
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  GO_VERSION: '1.24'
+  CGO_ENABLED: 1
+
+jobs:
+  test-build:
+    name: Test Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Set up CGO dependencies (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc libc6-dev
+
+    - name: Set up CGO dependencies (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        xcode-select --install || true
+
+    - name: Test build client
+      run: |
+        cd client
+        go build -v .
+
+    - name: Test build gateway
+      run: |
+        cd gateway
+        go build -v .
+
+    - name: Run tests
+      run: |
+        go test ./... 

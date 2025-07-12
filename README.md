@@ -118,22 +118,58 @@ go run main.go
 
 ## 构建和部署
 
-### 构建所有平台版本
+### 本地构建
+
+#### 使用构建脚本（推荐）
 ```bash
+# 构建所有组件
 ./scripts/build.sh
+
+# 只构建客户端
+./scripts/build.sh client
+
+# 只构建服务端
+./scripts/build.sh gateway
+
+# 测试交叉编译
+./scripts/build.sh cross
+
+# 运行测试
+./scripts/build.sh test
 ```
 
-这将生成以下文件：
-- `build/smart-finder-client-windows.exe` - Windows客户端
-- `build/smart-finder-client-darwin` - macOS客户端  
-- `build/smart-finder-client-linux` - Linux客户端
-- `build/smart-finder-gateway-linux` - Linux服务端
-- `build/smart-finder-gateway-windows.exe` - Windows服务端
-
-### 部署
+#### 手动构建
 ```bash
-./scripts/deploy.sh
+# 构建客户端
+cd client
+go build -ldflags="-s -w" -o smart-finder-client .
+
+# 构建服务端
+cd gateway
+go build -ldflags="-s -w" -o smart-finder-gateway .
 ```
+
+### GitHub Actions 自动构建
+
+项目配置了GitHub Actions工作流，支持：
+
+1. **自动测试构建**：每次推送代码时自动测试构建
+2. **多平台构建**：支持Windows、Linux、macOS平台
+3. **Release打包**：发布Release时自动生成所有平台的安装包
+
+详细说明请查看 [GitHub Actions 文档](docs/github-actions.md)
+
+### 构建产物
+
+构建完成后会生成以下文件：
+- `smart-finder-client-linux-amd64` - Linux客户端
+- `smart-finder-client-windows-amd64.exe` - Windows客户端
+- `smart-finder-client-darwin-amd64` - macOS Intel客户端
+- `smart-finder-client-darwin-arm64` - macOS Apple Silicon客户端
+- `smart-finder-gateway-linux-amd64` - Linux服务端
+- `smart-finder-gateway-windows-amd64.exe` - Windows服务端
+- `smart-finder-gateway-darwin-amd64` - macOS Intel服务端
+- `smart-finder-gateway-darwin-arm64` - macOS Apple Silicon服务端
 
 ## 配置
 
