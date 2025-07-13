@@ -162,14 +162,41 @@ go build -ldflags="-s -w" -o smart-finder-gateway .
 ### 构建产物
 
 构建完成后会生成以下文件：
-- `smart-finder-client-linux-amd64` - Linux客户端
+- `smart-finder-client-linux-amd64` - Linux客户端 (兼容CentOS 7+)
 - `smart-finder-client-windows-amd64.exe` - Windows客户端
 - `smart-finder-client-darwin-amd64` - macOS Intel客户端
 - `smart-finder-client-darwin-arm64` - macOS Apple Silicon客户端
-- `smart-finder-gateway-linux-amd64` - Linux服务端
+- `smart-finder-gateway-linux-amd64` - Linux服务端 (兼容CentOS 7+)
 - `smart-finder-gateway-windows-amd64.exe` - Windows服务端
 - `smart-finder-gateway-darwin-amd64` - macOS Intel服务端
 - `smart-finder-gateway-darwin-arm64` - macOS Apple Silicon服务端
+
+### CentOS 7 兼容性
+
+项目已针对CentOS 7进行了优化：
+
+- **静态链接**: 使用静态链接避免动态库依赖问题
+- **架构兼容**: 设置 `GOAMD64=v1` 确保与旧版本CPU兼容
+- **纯Go实现**: 使用 `osusergo,netgo` 标签确保纯Go实现
+
+详细说明请查看 [CentOS 7 兼容性文档](docs/centos7-compatibility.md)
+
+#### 本地构建CentOS 7兼容版本
+```bash
+# 使用专用构建脚本
+./scripts/build-centos7.sh
+
+# 或手动构建
+export CGO_ENABLED=0
+export GOOS=linux
+export GOARCH=amd64
+export GOAMD64=v1
+
+cd client
+go build -ldflags="-s -w -extldflags=-static" -tags="osusergo,netgo" -o smart-finder-client-linux-amd64-centos7 .
+cd ../gateway
+go build -ldflags="-s -w -extldflags=-static" -tags="osusergo,netgo" -o smart-finder-gateway-linux-amd64-centos7 .
+```
 
 ## 配置
 
