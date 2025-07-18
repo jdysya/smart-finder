@@ -4,8 +4,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"mime"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -59,6 +64,7 @@ func main() {
 	http.HandleFunc("/api/health", corsMiddleware(healthHandler))
 	http.HandleFunc("/api/path2url", path2urlHandler)
 	http.HandleFunc("/api/files", filesHandler)
+	http.HandleFunc("/api/md5", apiMD5FileHandler)
 
 	// md5 文件定位路由
 	http.HandleFunc("/md5", corsMiddleware(md5Handler))
@@ -108,6 +114,55 @@ func md5Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write([]byte("已在文件管理器中定位文件"))
+}
+
+// 新增：通过md5返回本地文件内容
+func apiMD5FileHandler(w http.ResponseWriter, r *http.Request) {
+	hash := r.URL.Query().Get("hash")
+	if len(hash) != 32 {
+		http.Error(w, "参数错误，缺少或错误的md5", 400)
+		return
+	}
+
+	var filePath, fileName string
+	err := dbConn.QueryRow("SELECT path, filename FROM files WHERE md5 = ?", hash).Scan(&filePath, &fileName)
+	if err == sql.ErrNoRows {
+		http.NotFound(w, r)
+		return
+	} else if err != nil {
+		http.Error(w, "数据库错误", 500)
+		return
+	}
+
+	f, err := os.Open(filePath)
+	if err != nil {
+		http.Error(w, "文件无法打开", 500)
+		return
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		http.Error(w, "文件信息获取失败", 500)
+		return
+	}
+
+	// 自动推断Content-Type
+	ext := filepath.Ext(fileName)
+	contentType := mime.TypeByExtension(ext)
+	if contentType == "" {
+		// 读一部分内容推断
+		buf := make([]byte, 512)
+		n, _ := f.Read(buf)
+		contentType = http.DetectContentType(buf[:n])
+		f.Seek(0, io.SeekStart)
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", "inline; filename=\""+fileName+"\"")
+	w.Header().Set("Content-Length", strconv.FormatInt(fi.Size(), 10))
+
+	// 支持Range请求（视频/大文件友好）
+	http.ServeContent(w, r, fileName, fi.ModTime(), f)
 }
 
 // 监控目录API
