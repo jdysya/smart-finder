@@ -27,6 +27,10 @@ func InitDB(dbPath string) (*sql.DB, error) {
         size INTEGER,
         modified_at DATETIME
     );
+	CREATE TABLE IF NOT EXISTS monitored_directories (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		path TEXT NOT NULL UNIQUE
+	);
     `
 	_, err = db.Exec(createTableSQL)
 	if err != nil {

@@ -19,12 +19,15 @@ import (
 	"smart-finder/client/internal/db"
 	"smart-finder/client/internal/indexer"
 	"smart-finder/client/internal/utils"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 var (
 	monitoredDirs   = make([]string, 0)
 	monitoredDirsMu sync.RWMutex
 	dbConn          *sql.DB
+	watcher         *fsnotify.Watcher
 )
 
 // CORS中间件
@@ -53,6 +56,69 @@ func main() {
 	if err != nil {
 		log.Fatal("数据库初始化失败:", err)
 	}
+
+	// 从数据库加载监控目录
+	rows, err := dbConn.Query("SELECT path FROM monitored_directories")
+	if err != nil {
+		log.Fatal("加载监控目录失败:", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err == nil {
+			monitoredDirsMu.Lock()
+			monitoredDirs = append(monitoredDirs, path)
+			monitoredDirsMu.Unlock()
+		}
+	}
+
+	// 初始化 watcher
+	watcher, err = fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal("创建文件监控器失败:", err)
+	}
+	defer watcher.Close()
+
+	// 将监控目录及其子目录添加到 watcher
+	monitoredDirsMu.RLock()
+	for _, dir := range monitoredDirs {
+		filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				log.Printf("访问路径 %q 失败: %v\n", path, err)
+				return err
+			}
+			if info.IsDir() {
+				err = watcher.Add(path)
+				if err != nil {
+					log.Printf("添加监控目录 %q 失败: %v\n", path, err)
+				}
+			}
+			return nil
+		})
+	}
+	monitoredDirsMu.RUnlock()
+
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				log.Println("检测到文件变动:", event)
+				if event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create {
+					indexer.Scanner(dbConn, event.Name)
+				} else if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
+					indexer.RemoveFile(dbConn, event.Name)
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Println("文件监控器错误:", err)
+			}
+		}
+	}()
 
 	// 静态文件服务（使用 embed.FS）
 	webRoot, _ := fs.Sub(webFS, "web")
@@ -178,9 +244,28 @@ func directoriesHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "参数错误", 400)
 			return
 		}
-		monitoredDirsMu.Lock()
+				monitoredDirsMu.Lock()
 		monitoredDirs = append(monitoredDirs, req.Path)
 		monitoredDirsMu.Unlock()
+
+		// 添加到数据库
+		db.UpdateMonitoredDir(dbConn, req.Path, "add")
+
+		// 添加到 watcher
+		filepath.Walk(req.Path, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				log.Printf("访问路径 %q 失败: %v\n", path, err)
+				return err
+			}
+			if info.IsDir() {
+				err = watcher.Add(path)
+				if err != nil {
+					log.Printf("添加监控目录 %q 失败: %v\n", path, err)
+				}
+			}
+			return nil
+		})
+
 		go indexer.Scanner(dbConn, req.Path)
 		w.WriteHeader(201)
 	case "DELETE":
@@ -197,6 +282,15 @@ func directoriesHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		monitoredDirsMu.Unlock()
+
+		// 从数据库删除
+		db.UpdateMonitoredDir(dbConn, req.Path, "remove")
+
+		// 从 watcher 中移除
+		err := watcher.Remove(req.Path)
+		if err != nil {
+			log.Println("移除监控目录失败:", err)
+		}
 		w.WriteHeader(204)
 	default:
 		http.Error(w, "不支持的方法", 405)
