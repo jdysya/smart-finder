@@ -214,8 +214,9 @@ jobs:
         cd release
         zip -r ../smart-finder-${{ github.event.release.tag_name }}.zip .
 
-    - name: Upload release assets
-      uses: actions/upload-artifact@v4
+    - name: Upload Release Asset
+      uses: softprops/action-gh-release@v2
       with:
-        name: release-package
-        path: smart-finder-${{ github.event.release.tag_name }}.zip 
+        files: smart-finder-${{ github.event.release.tag_name }}.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
