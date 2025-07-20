@@ -244,7 +244,7 @@ func directoriesHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "参数错误", 400)
 			return
 		}
-				monitoredDirsMu.Lock()
+		monitoredDirsMu.Lock()
 		monitoredDirs = append(monitoredDirs, req.Path)
 		monitoredDirsMu.Unlock()
 
@@ -348,9 +348,53 @@ func path2urlHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// 获取所有已索引文件
+// 获取所有已索引文件，支持分页
 func filesHandler(w http.ResponseWriter, r *http.Request) {
-	rows, err := dbConn.Query("SELECT md5, path, filename, size, modified_at FROM files")
+	// 解析分页参数
+	pageStr := r.URL.Query().Get("page")
+	pageSizeStr := r.URL.Query().Get("pageSize")
+	search := r.URL.Query().Get("search")
+	page := 1
+	pageSize := 20
+	var err error
+	if pageStr != "" {
+		page, err = strconv.Atoi(pageStr)
+		if err != nil || page < 1 {
+			page = 1
+		}
+	}
+	if pageSizeStr != "" {
+		pageSize, err = strconv.Atoi(pageSizeStr)
+		if err != nil || pageSize < 1 {
+			pageSize = 20
+		}
+	}
+	offset := (page - 1) * pageSize
+
+	// 构造SQL和参数
+	var (
+		where string
+		args  []interface{}
+	)
+	if search != "" {
+		where = "WHERE filename LIKE ? OR path LIKE ?"
+		like := "%" + search + "%"
+		args = append(args, like, like)
+	}
+
+	// 查询总数
+	totalSql := "SELECT COUNT(*) FROM files " + where
+	var total int
+	err = dbConn.QueryRow(totalSql, args...).Scan(&total)
+	if err != nil {
+		http.Error(w, "数据库错误", 500)
+		return
+	}
+
+	// 查询分页数据
+	dataSql := "SELECT md5, path, filename, size, modified_at FROM files " + where + " ORDER BY modified_at DESC LIMIT ? OFFSET ?"
+	args = append(args, pageSize, offset)
+	rows, err := dbConn.Query(dataSql, args...)
 	if err != nil {
 		http.Error(w, "数据库错误", 500)
 		return
@@ -370,5 +414,8 @@ func filesHandler(w http.ResponseWriter, r *http.Request) {
 			files = append(files, f)
 		}
 	}
-	json.NewEncoder(w).Encode(files)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"files": files,
+		"total": total,
+	})
 }

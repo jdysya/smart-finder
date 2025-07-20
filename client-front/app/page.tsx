@@ -7,13 +7,24 @@ import { Progress } from '@heroui/progress';
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from '@heroui/table';
 
 export default function Home() {
+  type FileItem = {
+    md5: string;
+    filename: string;
+    path: string;
+    size: number;
+    modified_at: string;
+  };
+
   const [dirs, setDirs] = useState([]);
   const [newDir, setNewDir] = useState('');
   const [status, setStatus] = useState<any>({});
-  const [files, setFiles] = useState([]);
+  const [files, setFiles] = useState<FileItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [path, setPath] = useState('');
   const [conversionResult, setConversionResult] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
 
   const fetchDirs = () => {
     fetch('/api/directories')
@@ -28,9 +39,17 @@ export default function Home() {
   };
 
   const fetchFiles = () => {
-    fetch('/api/files')
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    if (searchTerm) params.append('search', searchTerm);
+    fetch(`/api/files?${params.toString()}`)
       .then((res) => res.json())
-      .then(setFiles);
+      .then((data) => {
+        setFiles(data.files || []);
+        setTotal(data.total || 0);
+      });
   };
 
   useEffect(() => {
@@ -40,6 +59,10 @@ export default function Home() {
     const interval = setInterval(fetchStatus, 1500);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    fetchFiles();
+  }, [page, pageSize, searchTerm]);
 
   const addDir = () => {
     fetch('/api/directories', {
@@ -52,7 +75,7 @@ export default function Home() {
     });
   };
 
-  const delDir = (path) => {
+  const delDir = (path: string) => {
     fetch('/api/directories', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -152,8 +175,19 @@ export default function Home() {
             className="mb-2"
             placeholder="搜索文件..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
           />
+          {/* 分页控件 */}
+          <div className="flex gap-2 my-2 items-center">
+            <Button size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}>上一页</Button>
+            <span>第 {page} 页 / 共 {Math.max(1, Math.ceil(total / pageSize))} 页</span>
+            <Button size="sm" disabled={page * pageSize >= total} onClick={() => setPage(page + 1)}>下一页</Button>
+            <span className="ml-4">每页</span>
+            <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }} className="border rounded px-1 py-0.5">
+              {[10, 20, 50, 100].map(sz => <option key={sz} value={sz}>{sz}</option>)}
+            </select>
+            <span>条</span>
+          </div>
           <Table aria-label="Indexed Files">
             <TableHeader>
               <TableColumn>文件名</TableColumn>
@@ -170,7 +204,7 @@ export default function Home() {
                   <TableCell>{(file.size / 1024).toFixed(2)} KB</TableCell>
                   <TableCell>{new Date(file.modified_at).toLocaleString()}</TableCell>
                   <TableCell>
-                    <Button as="a" href={`/direct/md5?hash=${file.md5}`} target="_blank" size="sm">
+                    <Button as="a" href={`/md5?hash=${file.md5}`} target="_blank" size="sm">
                       打开
                     </Button>
                   </TableCell>
