@@ -164,18 +164,9 @@ jobs:
       with:
         path: artifacts
 
-    - name: Create release package
+    - name: Create README for release
       run: |
-        mkdir -p release
-        # Copy client binaries
-        cp artifacts/client-*/smart-finder-client-* release/ || true
-        # Copy gateway binaries  
-        cp artifacts/gateway-*/smart-finder-gateway-* release/ || true
-        # Copy configuration files
-        cp gateway/config/config.yaml release/ || true
-        cp gateway/public/error/not-found.html release/ || true
-        # Create README for release
-        cat > release/README.md << 'EOF'
+        cat > README.md << 'EOF'
         # Smart Finder Release
         
         ## 兼容性说明
@@ -209,14 +200,14 @@ jobs:
         如果遇到权限问题，请使用: chmod +x smart-finder-*
         EOF
 
-    - name: Create release zip
-      run: |
-        cd release
-        zip -r ../smart-finder-${{ github.event.release.tag_name }}.zip .
-
-    - name: Upload Release Asset
+    - name: Upload Release Assets
       uses: softprops/action-gh-release@v2
       with:
-        files: smart-finder-${{ github.event.release.tag_name }}.zip
+        files: |
+          artifacts/client-*/*
+          artifacts/gateway-*/*
+          gateway/config/config.yaml
+          gateway/public/error/not-found.html
+          README.md
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
