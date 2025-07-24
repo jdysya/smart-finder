@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"smart-finder/client/internal/core"
+	"smart-finder/client/internal/db"
 )
 
 var (
@@ -15,37 +16,70 @@ var (
 	IndexingDone  int
 )
 
-func Scanner(db *sql.DB, root string) error {
+func Scanner(dbConn *sql.DB, root string) error {
 	Indexing = true
 	defer func() { Indexing = false }()
-	// 先统计总文件数
+
+	ignorePatterns, err := db.GetIgnoredPatterns(dbConn)
+	if err != nil {
+		log.Printf("Error getting ignored patterns: %v", err)
+		// Decide if you want to continue without ignore patterns or return the error
+	}
+
+	// First, count the total number of files to be indexed.
 	total := 0
 	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil
+			return nil // Skip files that can't be accessed
 		}
-		if info.IsDir() {
-			return nil
+
+		// Check against ignore patterns
+		for _, pattern := range ignorePatterns {
+			matched, _ := filepath.Match(pattern, info.Name())
+			if matched {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
 		}
-		total++
+
+		if !info.IsDir() {
+			total++
+		}
 		return nil
 	})
 	IndexingTotal = total
 	IndexingDone = 0
-	// 正式索引
+
+	// Formal indexing
 	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			log.Printf("扫描文件/目录时出错: %s, 错误: %v, 已跳过", path, err)
+			log.Printf("Error accessing a file or directory: %s, error: %v, skipping", path, err)
 			return nil
 		}
-		if info.IsDir() {
-			return nil // 跳过目录本身
+
+		// Check against ignore patterns
+		for _, pattern := range ignorePatterns {
+			matched, _ := filepath.Match(pattern, info.Name())
+			if matched {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
 		}
+
+		if info.IsDir() {
+			return nil // Skip directories themselves
+		}
+
 		md5sum, err := CalculateMD5(path)
 		if err != nil {
-			log.Printf("计算 MD5 时出错: %s, 错误: %v, 已跳过", path, err)
+			log.Printf("Error calculating MD5 for: %s, error: %v, skipping", path, err)
 			return nil
 		}
+
 		fileIndex := core.FileIndex{
 			MD5:        md5sum,
 			Path:       path,
@@ -53,8 +87,9 @@ func Scanner(db *sql.DB, root string) error {
 			Size:       info.Size(),
 			ModifiedAt: info.ModTime(),
 		}
-		// 插入或更新
-		_, err = db.Exec(`
+
+		// Insert or update
+		_, err = dbConn.Exec(`
             INSERT INTO files (md5, path, filename, size, modified_at)
             VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(md5) DO UPDATE SET
@@ -64,9 +99,11 @@ func Scanner(db *sql.DB, root string) error {
                 modified_at=excluded.modified_at
         `, fileIndex.MD5, fileIndex.Path, fileIndex.Filename, fileIndex.Size, fileIndex.ModifiedAt)
 		if err != nil {
-			log.Printf("索引文件失败: %s, 错误: %v", path, err)
+			log.Printf("Failed to index file: %s, error: %v", path, err)
 		}
+
 		IndexingDone++
 		return nil
 	})
 }
+

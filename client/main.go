@@ -131,6 +131,7 @@ func main() {
 	http.HandleFunc("/api/path2url", path2urlHandler)
 	http.HandleFunc("/api/files", filesHandler)
 	http.HandleFunc("/api/md5", apiMD5FileHandler)
+	http.HandleFunc("/api/ignore-patterns", ignorePatternsHandler)
 
 	// md5 文件定位路由
 	http.HandleFunc("/md5", corsMiddleware(md5Handler))
@@ -346,6 +347,32 @@ func path2urlHandler(w http.ResponseWriter, r *http.Request) {
 		"md5": md5,
 		"url": url,
 	})
+}
+
+func ignorePatternsHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		patterns, err := db.GetIgnoredPatterns(dbConn)
+		if err != nil {
+			http.Error(w, "Failed to get ignored patterns", 500)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		json.NewEncoder(w).Encode(patterns)
+	case "POST":
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Failed to read request body", 400)
+			return
+		}
+		if err := db.UpdateIgnoredPatterns(dbConn, string(body)); err != nil {
+			http.Error(w, "Failed to update ignored patterns", 500)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	default:
+		http.Error(w, "Unsupported method", 405)
+	}
 }
 
 // 获取所有已索引文件，支持分页

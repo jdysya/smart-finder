@@ -40,5 +40,5 @@ Thumbs.db
 # 配置文件（生产环境）
 gateway/config/config.prod.yaml 
 
-
-client/data/md5fs.db
+# 数据文件
+client/data/

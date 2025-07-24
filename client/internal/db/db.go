@@ -38,6 +38,10 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		path TEXT NOT NULL UNIQUE
 	);
+	CREATE TABLE IF NOT EXISTS ignored_patterns (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		pattern TEXT NOT NULL UNIQUE
+	);
     `
 	_, err = db.Exec(createTableSQL)
 	if err != nil {

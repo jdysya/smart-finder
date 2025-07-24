@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react';
 import { Button } from '@heroui/button';
-import { Input } from '@heroui/input';
+import { Input, Textarea } from '@heroui/input';
 import { Card, CardHeader, CardBody } from '@heroui/card';
 import { Progress } from '@heroui/progress';
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from '@heroui/table';
@@ -25,6 +25,7 @@ export default function Home() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
+  const [ignorePatterns, setIgnorePatterns] = useState('');
 
   const fetchDirs = () => {
     fetch('/api/directories')
@@ -52,10 +53,17 @@ export default function Home() {
       });
   };
 
+  const fetchIgnorePatterns = () => {
+    fetch('/api/ignore-patterns')
+      .then((res) => res.json())
+      .then((data) => setIgnorePatterns(data.join('\n')));
+  };
+
   useEffect(() => {
     fetchDirs();
     fetchStatus();
     fetchFiles();
+    fetchIgnorePatterns();
     const interval = setInterval(fetchStatus, 1500);
     return () => clearInterval(interval);
   }, []);
@@ -81,6 +89,14 @@ export default function Home() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path }),
     }).then(fetchDirs);
+  };
+
+  const saveIgnorePatterns = () => {
+    fetch('/api/ignore-patterns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: ignorePatterns,
+    }).then(() => alert('忽略规则已保存'));
   };
 
   const convertPath = () => {
@@ -165,6 +181,19 @@ export default function Home() {
             <Button onClick={convertPath}>转换</Button>
           </div>
           {conversionResult && <p>{conversionResult}</p>}
+        </CardBody>
+      </Card>
+
+      <Card className="mb-4">
+        <CardHeader>忽略规则</CardHeader>
+        <CardBody>
+          <Textarea
+            value={ignorePatterns}
+            onChange={(e) => setIgnorePatterns(e.target.value)}
+            placeholder="输入忽略规则，一行一个"
+            rows={10}
+          />
+          <Button onClick={saveIgnorePatterns} className="mt-2">保存规则</Button>
         </CardBody>
       </Card>
 
