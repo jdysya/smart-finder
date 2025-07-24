@@ -15,10 +15,17 @@ func InitDB(dbPath string) (*sql.DB, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open("sqlite", dbPath+"?_busy_timeout=5000")
 	if err != nil {
 		return nil, err
 	}
+
+	// 开启 WAL 模式，提高并发能力
+	_, err = db.Exec("PRAGMA journal_mode=WAL;")
+	if err != nil {
+		return nil, fmt.Errorf("failed to enable WAL mode: %w", err)
+	}
+
 	createTableSQL := `
     CREATE TABLE IF NOT EXISTS files (
         md5 TEXT PRIMARY KEY,
