@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"database/sql"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -34,14 +35,16 @@ func Scanner(db *sql.DB, root string) error {
 	// 正式索引
 	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return err
+			log.Printf("扫描文件/目录时出错: %s, 错误: %v, 已跳过", path, err)
+			return nil
 		}
 		if info.IsDir() {
 			return nil // 跳过目录本身
 		}
 		md5sum, err := CalculateMD5(path)
 		if err != nil {
-			return err
+			log.Printf("计算 MD5 时出错: %s, 错误: %v, 已跳过", path, err)
+			return nil
 		}
 		fileIndex := core.FileIndex{
 			MD5:        md5sum,
@@ -60,7 +63,10 @@ func Scanner(db *sql.DB, root string) error {
                 size=excluded.size,
                 modified_at=excluded.modified_at
         `, fileIndex.MD5, fileIndex.Path, fileIndex.Filename, fileIndex.Size, fileIndex.ModifiedAt)
+		if err != nil {
+			log.Printf("索引文件失败: %s, 错误: %v", path, err)
+		}
 		IndexingDone++
-		return err
+		return nil
 	})
 }
