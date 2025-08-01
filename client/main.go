@@ -36,6 +36,7 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Check-Request")
+		w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
 
 		// 处理预检请求
 		if r.Method == "OPTIONS" {
@@ -216,13 +217,18 @@ func apiMD5FileHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 自动推断Content-Type
 	ext := filepath.Ext(fileName)
-	contentType := mime.TypeByExtension(ext)
-	if contentType == "" {
-		// 读一部分内容推断
-		buf := make([]byte, 512)
-		n, _ := f.Read(buf)
-		contentType = http.DetectContentType(buf[:n])
-		f.Seek(0, io.SeekStart)
+	var contentType string
+	if ext == ".md" || ext == ".markdown" {
+		contentType = "text/markdown; charset=utf-8"
+	} else {
+		contentType = mime.TypeByExtension(ext)
+		if contentType == "" {
+			// 读一部分内容推断
+			buf := make([]byte, 512)
+			n, _ := f.Read(buf)
+			contentType = http.DetectContentType(buf[:n])
+			f.Seek(0, io.SeekStart)
+		}
 	}
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Disposition", "inline; filename=\""+fileName+"\"")

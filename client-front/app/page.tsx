@@ -140,7 +140,7 @@ export default function Home() {
           </div>
           <ul>
             {dirs.map((dir) => (
-              <li key={dir} className="flex justify-between items-center p-2 bg-gray-100 rounded mb-1">
+              <li key={dir} className="flex justify-between items-center p-2  rounded mb-1">
                 <span>{dir}</span>
                 <Button color="danger" size="sm" onClick={() => delDir(dir)}>
                   删除
@@ -233,7 +233,7 @@ export default function Home() {
                   <TableCell>{(file.size / 1024).toFixed(2)} KB</TableCell>
                   <TableCell>{new Date(file.modified_at).toLocaleString()}</TableCell>
                   <TableCell>
-                    <Button as="a" href={`/md5?hash=${file.md5}`} target="_blank" size="sm">
+                    <Button as="a" href={`/view?hash=${file.md5}`} target="_blank" size="sm">
                       打开
                     </Button>
                   </TableCell>
