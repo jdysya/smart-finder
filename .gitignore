@@ -42,3 +42,7 @@ gateway/config/config.prod.yaml
 
 # 数据文件
 client/data/
+
+# 前端打包静态文件
+
+client/web/
