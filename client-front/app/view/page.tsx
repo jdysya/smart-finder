@@ -170,12 +170,8 @@ function ViewPageContent() {
           setRawContent(text);
         } else {
           setFileType('unknown');
-          try {
-            const text = await response.text();
-            setRawContent(text);
-          } catch (e) {
-            setRawContent('Cannot display binary content.');
-          }
+          // 不支持的文件类型，定位文件到文件管理器
+          window.location.href = '/api/locate/md5?hash=' + hash;
         }
       } catch (e: any) {
         setError(e.message);
