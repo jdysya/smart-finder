@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -59,11 +60,11 @@ type spaFileSystem struct {
 }
 
 // Open opens the named file.
-func (fs *spaFileSystem) Open(name string) (http.File, error) {
-	f, err := fs.root.Open(name)
+func (sfs *spaFileSystem) Open(name string) (http.File, error) {
+	f, err := sfs.root.Open(name)
 	// If the file is not found, and it's not a directory, try appending .html
-	if os.IsNotExist(err) && !strings.HasSuffix(name, "/") {
-		return fs.root.Open(name + ".html")
+	if errors.Is(err, fs.ErrNotExist) && !strings.HasSuffix(name, "/") {
+		return sfs.root.Open(name + ".html")
 	}
 	return f, err
 }
