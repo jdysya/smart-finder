@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,6 +51,22 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 //go:embed web/*
 var webFS embed.FS
+
+// spaFileSystem wraps an http.FileSystem and rewrites requests
+// for paths without extensions to their .html equivalent.
+type spaFileSystem struct {
+	root http.FileSystem
+}
+
+// Open opens the named file.
+func (fs *spaFileSystem) Open(name string) (http.File, error) {
+	f, err := fs.root.Open(name)
+	// If the file is not found, and it's not a directory, try appending .html
+	if os.IsNotExist(err) && !strings.HasSuffix(name, "/") {
+		return fs.root.Open(name + ".html")
+	}
+	return f, err
+}
 
 func main() {
 	var err error
@@ -123,7 +140,7 @@ func main() {
 
 	// 静态文件服务（使用 embed.FS）
 	webRoot, _ := fs.Sub(webFS, "web")
-	http.Handle("/", http.FileServer(http.FS(webRoot)))
+	http.Handle("/", http.FileServer(&spaFileSystem{root: http.FS(webRoot)}))
 
 	// API 路由
 	http.HandleFunc("/api/directories", directoriesHandler)
@@ -135,7 +152,7 @@ func main() {
 	http.HandleFunc("/api/ignore-patterns", ignorePatternsHandler)
 
 	// md5 文件定位路由
-	http.HandleFunc("/md5", corsMiddleware(md5Handler))
+	http.HandleFunc("/api/locate/md5", corsMiddleware(md5Handler))
 
 	port := 8964
 	log.Printf("服务启动: http://127.0.0.1:%d\n", port)
