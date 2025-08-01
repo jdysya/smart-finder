@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -105,7 +105,8 @@ const FrontmatterDisplay = ({ data }: { data: { [key: string]: any } }) => {
   );
 };
 
-export default function ViewPage() {
+// Component that uses useSearchParams
+function ViewPageContent() {
   const searchParams = useSearchParams();
   const { theme } = useTheme();
   const hash = searchParams.get('hash');
@@ -249,6 +250,19 @@ export default function ViewPage() {
         renderContent()
       )}
     </div>
+  );
+}
+
+// Loading component for Suspense fallback
+function ViewPageLoading() {
+  return <div className="container mx-auto p-4">Loading...</div>;
+}
+
+export default function ViewPage() {
+  return (
+    <Suspense fallback={<ViewPageLoading />}>
+      <ViewPageContent />
+    </Suspense>
   );
 }
 
