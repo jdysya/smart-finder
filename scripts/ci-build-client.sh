@@ -7,7 +7,7 @@ if [[ "$RUNNER_OS" == "Windows" ]]; then
   go build -ldflags="-s -w -H=windowsgui" -tags="osusergo,netgo" -o "smart-finder-client-${PLATFORM}-${ARCH}${EXT}" .
   cd ..
   ZIP_NAME="smart-finder-client-${PLATFORM}-${ARCH}.zip"
-  powershell -Command "Compress-Archive -Path 'client/smart-finder-client-${PLATFORM}-${ARCH}${EXT}' -DestinationPath 'client/${ZIP_NAME}' -Force"
+  powershell -Command "Compress-Archive -Path \"client/smart-finder-client-${PLATFORM}-${ARCH}${EXT}\" -DestinationPath \"client/${ZIP_NAME}\" -Force"
   echo "artifact_name=client-${PLATFORM}-${ARCH}-zip" >> $GITHUB_OUTPUT
   echo "artifact_path=client/${ZIP_NAME}" >> $GITHUB_OUTPUT
 elif [[ "$RUNNER_OS" == "macOS" ]]; then
