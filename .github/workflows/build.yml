@@ -68,6 +68,7 @@ jobs:
         pnpm build
     
     - name: Copy Frontend to Client
+      shell: bash
       run: |
         rm -rf client/web
         mkdir -p client/web
