@@ -9,14 +9,14 @@ if [[ "$RUNNER_OS" == "Linux" ]]; then
   echo "artifact_path=client/smart-finder-client-${PLATFORM}-${ARCH}${EXT}" >> $GITHUB_OUTPUT
 elif [[ "$RUNNER_OS" == "Windows" ]]; then
   pwsh -c "
-    $env:CGO_ENABLED='1';
+    $env:CGO_ENABLED = '1';
     cd client;
-    go build -ldflags='-s -w -H=windowsgui' -tags='osusergo,netgo' -o \"smart-finder-client-${env:PLATFORM}-${env:ARCH}${env:EXT}\" .;
+    go build -ldflags='-s -w -H=windowsgui' -tags='osusergo,netgo' -o 'smart-finder-client-${PLATFORM}-${ARCH}${EXT}';
     cd ..;
-    $ZIP_NAME=\"smart-finder-client-${env:PLATFORM}-${env:ARCH}.zip\";
-    Compress-Archive -Path \"client/smart-finder-client-${env:PLATFORM}-${env:ARCH}${env:EXT}\" -DestinationPath \"client/\$ZIP_NAME\";
-    echo \"artifact_name=client-${env:PLATFORM}-${env:ARCH}-zip\" >> \$env:GITHUB_OUTPUT;
-    echo \"artifact_path=client/\$ZIP_NAME\" >> \$env:GITHUB_OUTPUT;
+    $ZIP_NAME = 'smart-finder-client-${PLATFORM}-${ARCH}.zip';
+    Compress-Archive -Path 'client/smart-finder-client-${PLATFORM}-${ARCH}${EXT}' -DestinationPath ('client/' + $ZIP_NAME);
+    echo ('artifact_name=client-${PLATFORM}-${ARCH}-zip') >> $env:GITHUB_OUTPUT;
+    echo ('artifact_path=client/' + $ZIP_NAME) >> $env:GITHUB_OUTPUT;
   "
 elif [[ "$RUNNER_OS" == "macOS" ]]; then
   export CGO_ENABLED=1
@@ -49,10 +49,9 @@ elif [[ "$RUNNER_OS" == "macOS" ]]; then
   go build -ldflags="-s -w" -o "../$APP_BUNDLE_PATH/Contents/MacOS/$BINARY_NAME" .
   cd ..
   PLIST_PATH="$APP_BUNDLE_PATH/Contents/Info.plist"
-  cat > "$PLIST_PATH" << EOL
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
+  echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
+<plist version=\"1.0\">
 <dict>
     <key>CFBundleExecutable</key>
     <string>${BINARY_NAME}</string>
@@ -73,8 +72,7 @@ elif [[ "$RUNNER_OS" == "macOS" ]]; then
     <key>LSUIElement</key>
     <true/>
 </dict>
-</plist>
-EOL
+</plist>" > "$PLIST_PATH"
   codesign --force --deep --sign - "$APP_BUNDLE_PATH"
   DMG_NAME="smart-finder-client-${PLATFORM}-${ARCH}.dmg"
   hdiutil create -volname "$APP_NAME" -srcfolder "$APP_BUNDLE_PATH" -ov -format UDZO "$DIST_DIR/$DMG_NAME"
