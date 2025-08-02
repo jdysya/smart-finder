@@ -1,13 +1,7 @@
 #!/bin/bash
 set -e
 
-if [[ "$RUNNER_OS" == "Linux" ]]; then
-  cd client
-  go build -ldflags="-s -w -extldflags=-static" -tags="osusergo,netgo" -o "smart-finder-client-${PLATFORM}-${ARCH}${EXT}" .
-  cd ..
-  echo "artifact_name=client-${PLATFORM}-${ARCH}" >> $GITHUB_OUTPUT
-  echo "artifact_path=client/smart-finder-client-${PLATFORM}-${ARCH}${EXT}" >> $GITHUB_OUTPUT
-elif [[ "$RUNNER_OS" == "Windows" ]]; then
+if [[ "$RUNNER_OS" == "Windows" ]]; then
   pwsh -c "
     $env:CGO_ENABLED = '1';
     cd client;
