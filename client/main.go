@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,6 +21,7 @@ import (
 	"io/fs"
 	"smart-finder/client/internal/db"
 	"smart-finder/client/internal/indexer"
+	"smart-finder/client/internal/tray"
 	"smart-finder/client/internal/utils"
 
 	"github.com/fsnotify/fsnotify"
@@ -70,11 +72,73 @@ func (sfs *spaFileSystem) Open(name string) (http.File, error) {
 }
 
 func main() {
-	var err error
-	dbConn, err = db.InitDB("data/md5fs.db")
+	tray.Run(onReady, onExit)
+}
+
+func onReady() {
+	go runApp()
+}
+
+func onExit() {
+	log.Println("正在退出...")
+	if dbConn != nil {
+		dbConn.Close()
+	}
+	if watcher != nil {
+		watcher.Close()
+	}
+}
+
+func getAppDataPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	// 为不同操作系统提供不同的标准路径
+	var appDataPath string
+	switch runtime.GOOS {
+	case "darwin":
+		appDataPath = filepath.Join(home, "Library", "Application Support", "Smart Finder")
+	case "windows":
+		appDataPath = filepath.Join(home, "AppData", "Roaming", "Smart Finder")
+	case "linux":
+		appDataPath = filepath.Join(home, ".config", "smart-finder")
+	default:
+		appDataPath = filepath.Join(home, ".smart-finder")
+	}
+
+	if err := os.MkdirAll(appDataPath, 0755); err != nil {
+		return "", err
+	}
+	return appDataPath, nil
+}
+
+func runApp() {
+	appDataPath, err := getAppDataPath()
+	if err != nil {
+		log.Fatalf("无法获取应用数据目录: %v", err)
+	}
+	dbPath := filepath.Join(appDataPath, "md5fs.db")
+
+	dbConn, err = db.InitDB(dbPath)
 	if err != nil {
 		log.Fatal("数据库初始化失败:", err)
 	}
+
+	// Start status updater
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			var count int
+			dbConn.QueryRow("SELECT COUNT(*) FROM files").Scan(&count)
+			status := fmt.Sprintf("Indexed: %d files", count)
+			if indexer.Indexing {
+				status = fmt.Sprintf("Indexing... (%d/%d)", indexer.IndexingDone, indexer.IndexingTotal)
+			}
+			tray.UpdateStatus(status)
+		}
+	}()
 
 	// 从数据库加载监控目录
 	rows, err := dbConn.Query("SELECT path FROM monitored_directories")
@@ -96,7 +160,6 @@ func main() {
 	if err != nil {
 		log.Fatal("创建文件监控器失败:", err)
 	}
-	defer watcher.Close()
 
 	// 将监控目录及其子目录添加到 watcher
 	monitoredDirsMu.RLock()
@@ -157,7 +220,9 @@ func main() {
 
 	port := 8964
 	log.Printf("服务启动: http://127.0.0.1:%d\n", port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil))
+	if err := http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), nil); err != nil {
+		log.Printf("服务启动失败: %v", err)
+	}
 }
 
 // 处理 /md5 路由
