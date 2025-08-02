@@ -49,9 +49,10 @@ elif [[ "$RUNNER_OS" == "macOS" ]]; then
   go build -ldflags="-s -w" -o "../$APP_BUNDLE_PATH/Contents/MacOS/$BINARY_NAME" .
   cd ..
   PLIST_PATH="$APP_BUNDLE_PATH/Contents/Info.plist"
-  echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
-<plist version=\"1.0\">
+  cat > "$PLIST_PATH" << EOL
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
     <string>${BINARY_NAME}</string>
@@ -72,10 +73,13 @@ elif [[ "$RUNNER_OS" == "macOS" ]]; then
     <key>LSUIElement</key>
     <true/>
 </dict>
-</plist>" > "$PLIST_PATH"
+</plist>
+EOL
+
   codesign --force --deep --sign - "$APP_BUNDLE_PATH"
   DMG_NAME="smart-finder-client-${PLATFORM}-${ARCH}.dmg"
   hdiutil create -volname "$APP_NAME" -srcfolder "$APP_BUNDLE_PATH" -ov -format UDZO "$DIST_DIR/$DMG_NAME"
   echo "artifact_name=client-${PLATFORM}-${ARCH}-dmg" >> $GITHUB_OUTPUT
   echo "artifact_path=$DIST_DIR/$DMG_NAME" >> $GITHUB_OUTPUT
+
 fi
