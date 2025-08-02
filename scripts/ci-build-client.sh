@@ -2,16 +2,14 @@
 set -e
 
 if [[ "$RUNNER_OS" == "Windows" ]]; then
-  pwsh -c "
-    $env:CGO_ENABLED = '1';
-    cd client;
-    go build -ldflags='-s -w -H=windowsgui' -tags='osusergo,netgo' -o 'smart-finder-client-${PLATFORM}-${ARCH}${EXT}';
-    cd ..;
-    $ZIP_NAME = 'smart-finder-client-${PLATFORM}-${ARCH}.zip';
-    Compress-Archive -Path 'client/smart-finder-client-${PLATFORM}-${ARCH}${EXT}' -DestinationPath ('client/' + $ZIP_NAME);
-    echo ('artifact_name=client-${PLATFORM}-${ARCH}-zip') >> $env:GITHUB_OUTPUT;
-    echo ('artifact_path=client/' + $ZIP_NAME) >> $env:GITHUB_OUTPUT;
-  "
+  export CGO_ENABLED=1
+  cd client
+  go build -ldflags="-s -w -H=windowsgui" -tags="osusergo,netgo" -o "smart-finder-client-${PLATFORM}-${ARCH}${EXT}" .
+  cd ..
+  ZIP_NAME="smart-finder-client-${PLATFORM}-${ARCH}.zip"
+  powershell -Command "Compress-Archive -Path 'client/smart-finder-client-${PLATFORM}-${ARCH}${EXT}' -DestinationPath 'client/${ZIP_NAME}' -Force"
+  echo "artifact_name=client-${PLATFORM}-${ARCH}-zip" >> $GITHUB_OUTPUT
+  echo "artifact_path=client/${ZIP_NAME}" >> $GITHUB_OUTPUT
 elif [[ "$RUNNER_OS" == "macOS" ]]; then
   export CGO_ENABLED=1
   APP_NAME="Smart Finder"
