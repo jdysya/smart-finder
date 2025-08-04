@@ -1,6 +1,8 @@
+//go:build windows
+
 package icon
 
 import _ "embed"
 
-//go:embed icon.png
+//go:embed icon.ico
 var Data []byte
