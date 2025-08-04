@@ -10,8 +10,12 @@ if [[ "$RUNNER_OS" == "Windows" ]]; then
   cd ..
   ZIP_NAME="smart-finder-client-${PLATFORM}-${ARCH}.zip"
   powershell -Command "Compress-Archive -Path \"client/smart-finder-client-${PLATFORM}-${ARCH}${EXT}\" -DestinationPath \"client/${ZIP_NAME}\" -Force"
-  echo "artifact_name=client-${PLATFORM}-${ARCH}-zip" >> $GITHUB_OUTPUT
-  echo "artifact_path=client/${ZIP_NAME}" >> $GITHUB_OUTPUT
+  if [[ -n "$GITHUB_OUTPUT" ]]; then
+    echo "artifact_name=client-${PLATFORM}-${ARCH}-zip" >> $GITHUB_OUTPUT
+    echo "artifact_path=client/${ZIP_NAME}" >> $GITHUB_OUTPUT
+  else
+    echo "Created artifact: client/${ZIP_NAME}"
+  fi
 
 elif [[ "$RUNNER_OS" == "macOS" ]]; then
   export CGO_ENABLED=1
@@ -74,7 +78,11 @@ EOL
   codesign --force --deep --sign - "$APP_BUNDLE_PATH"
   DMG_NAME="smart-finder-client-${PLATFORM}-${ARCH}.dmg"
   hdiutil create -volname "$APP_NAME" -srcfolder "$APP_BUNDLE_PATH" -ov -format UDZO "$DIST_DIR/$DMG_NAME"
-  echo "artifact_name=client-${PLATFORM}-${ARCH}-dmg" >> $GITHUB_OUTPUT
-  echo "artifact_path=$DIST_DIR/$DMG_NAME" >> $GITHUB_OUTPUT
+  if [[ -n "$GITHUB_OUTPUT" ]]; then
+    echo "artifact_name=client-${PLATFORM}-${ARCH}-dmg" >> $GITHUB_OUTPUT
+    echo "artifact_path=$DIST_DIR/$DMG_NAME" >> $GITHUB_OUTPUT
+  else
+    echo "Created artifact: $DIST_DIR/$DMG_NAME"
+  fi
 
 fi
