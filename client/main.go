@@ -212,7 +212,7 @@ func runApp() {
 	http.HandleFunc("/api/health", corsMiddleware(healthHandler))
 	http.HandleFunc("/api/path2url", path2urlHandler)
 	http.HandleFunc("/api/files", filesHandler)
-	http.HandleFunc("/api/md5", apiMD5FileHandler)
+	http.HandleFunc("/api/md5", corsMiddleware(apiMD5FileHandler))
 	http.HandleFunc("/api/ignore-patterns", ignorePatternsHandler)
 
 	// md5 文件定位路由
@@ -234,27 +234,13 @@ func md5Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 检查是否是检查请求
-	isCheckRequest := r.Header.Get("X-Check-Request") == "true"
-
 	var filePath string
 	err := dbConn.QueryRow("SELECT path FROM files WHERE md5 = ?", hash).Scan(&filePath)
 	if err == sql.ErrNoRows {
-		if isCheckRequest {
-			// 如果是检查请求，返回404状态但不显示错误页面
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
 		http.NotFound(w, r)
 		return
 	} else if err != nil {
 		http.Error(w, "数据库错误", 500)
-		return
-	}
-
-	// 如果是检查请求，只返回成功状态
-	if isCheckRequest {
-		w.WriteHeader(http.StatusOK)
 		return
 	}
 
@@ -275,9 +261,17 @@ func apiMD5FileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 检查是否是检查请求
+	isCheckRequest := r.Header.Get("X-Check-Request") == "true"
+
 	var filePath, fileName string
 	err := dbConn.QueryRow("SELECT path, filename FROM files WHERE md5 = ?", hash).Scan(&filePath, &fileName)
 	if err == sql.ErrNoRows {
+		if isCheckRequest {
+			// 如果是检查请求，返回404状态但不显示错误页面
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		http.NotFound(w, r)
 		return
 	} else if err != nil {
@@ -295,6 +289,12 @@ func apiMD5FileHandler(w http.ResponseWriter, r *http.Request) {
 	fi, err := f.Stat()
 	if err != nil {
 		http.Error(w, "文件信息获取失败", 500)
+		return
+	}
+
+	// 如果是检查请求，只返回成功状态
+	if isCheckRequest {
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
