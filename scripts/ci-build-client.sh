@@ -3,8 +3,7 @@ set -e
 
 if [[ "$RUNNER_OS" == "Windows" ]]; then
   export CGO_ENABLED=1
-  go install github.com/tc-hib/go-winres@latest
-  go-winres simply --icon client/internal/icon/icon.png --out client/winres.syso
+  go run github.com/tc-hib/go-winres@latest simply --icon client/internal/icon/icon.png --out client/winres.syso
   cd client
   go build -ldflags="-s -w -H=windowsgui" -tags="osusergo,netgo" -o "smart-finder-client-${PLATFORM}-${ARCH}${EXT}" .
   cd ..
