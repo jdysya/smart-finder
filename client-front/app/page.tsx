@@ -20,12 +20,11 @@ export default function Home() {
   const [status, setStatus] = useState<any>({});
   const [files, setFiles] = useState<FileItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [path, setPath] = useState('');
-  const [conversionResult, setConversionResult] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
   const [ignorePatterns, setIgnorePatterns] = useState('');
+  const [scanStatus, setScanStatus] = useState<any>({});
 
   const fetchDirs = () => {
     fetch('/api/directories')
@@ -56,7 +55,25 @@ export default function Home() {
   const fetchIgnorePatterns = () => {
     fetch('/api/ignore-patterns')
       .then((res) => res.json())
-      .then((data) => setIgnorePatterns(data.join('\n')));
+      .then((data) => setIgnorePatterns(data?.join('\n')));
+  };
+
+  const fetchScanStatus = () => {
+    fetch('/api/scan/status')
+      .then((res) => res.json())
+      .then(setScanStatus)
+      .catch(() => setScanStatus({}));
+  };
+
+  const triggerScan = () => {
+    fetch('/api/scan/trigger', {
+      method: 'POST',
+    }).then(() => {
+      alert('扫描已触发');
+      fetchScanStatus();
+    }).catch(() => {
+      alert('触发扫描失败');
+    });
   };
 
   useEffect(() => {
@@ -64,8 +81,13 @@ export default function Home() {
     fetchStatus();
     fetchFiles();
     fetchIgnorePatterns();
+    fetchScanStatus();
     const interval = setInterval(fetchStatus, 1500);
-    return () => clearInterval(interval);
+    const scanInterval = setInterval(fetchScanStatus, 2000);
+    return () => {
+      clearInterval(interval);
+      clearInterval(scanInterval);
+    };
   }, []);
 
   useEffect(() => {
@@ -97,24 +119,6 @@ export default function Home() {
       headers: { 'Content-Type': 'text/plain' },
       body: ignorePatterns,
     }).then(() => alert('忽略规则已保存'));
-  };
-
-  const convertPath = () => {
-    fetch('/api/path2url', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path }),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const msg = await res.text();
-          setConversionResult(`Error: ${msg}`);
-        } else {
-          const data = await res.json();
-          setConversionResult(`MD5: ${data.md5} | URL: ${data.url}`);
-        }
-      })
-      .catch((err) => setConversionResult(`Error: ${err.message}`));
   };
 
   const filteredFiles = files.filter(
@@ -152,6 +156,63 @@ export default function Home() {
       </Card>
 
       <Card className="mb-4">
+        <CardHeader>扫描控制</CardHeader>
+        <CardBody>
+          <div className="flex gap-2 mb-4">
+            <Button 
+              onClick={triggerScan} 
+              color="primary"
+              disabled={scanStatus.is_scanning}
+            >
+              {scanStatus.is_scanning ? '扫描中...' : '手动触发扫描'}
+            </Button>
+          </div>
+          
+          {scanStatus.is_scanning && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>当前目录: {scanStatus.current_dir || '准备中...'}</span>
+                <span>进度: {scanStatus.progress?.toFixed(1) || 0}%</span>
+              </div>
+              <Progress 
+                value={scanStatus.progress || 0} 
+                className="w-full"
+              />
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>总文件数: {scanStatus.total_files || 0}</div>
+                <div>已处理: {scanStatus.processed_files || 0}</div>
+                <div>已跳过: {scanStatus.skipped_files || 0}</div>
+                <div>错误: {scanStatus.error_files || 0}</div>
+              </div>
+              {scanStatus.elapsed_time && (
+                <div className="text-sm text-gray-600">
+                  已用时: {scanStatus.elapsed_time}
+                </div>
+              )}
+            </div>
+          )}
+          
+          {!scanStatus.is_scanning && scanStatus.total_files > 0 && (
+            <div className="mt-4 p-3 rounded">
+              <h4 className="font-medium mb-2">上次扫描结果:</h4>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>总文件数: {scanStatus.total_files}</div>
+                <div>已处理: {scanStatus.processed_files}</div>
+                <div>已跳过: {scanStatus.skipped_files}</div>
+                <div>删除过时: {scanStatus.deleted_files}</div>
+                <div>错误: {scanStatus.error_files}</div>
+                {scanStatus.start_time && (
+                  <div className="col-span-2 mt-2 pt-2 border-t">
+                    扫描时间: {new Date(scanStatus.start_time).toLocaleString()}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </CardBody>
+      </Card>
+
+      <Card className="mb-4">
         <CardHeader>状态</CardHeader>
         <CardBody>
           {status.indexing ? (
@@ -166,21 +227,6 @@ export default function Home() {
           ) : (
             <p>索引数量: {status.fileCount}</p>
           )}
-        </CardBody>
-      </Card>
-
-      <Card className="mb-4">
-        <CardHeader>路径转换</CardHeader>
-        <CardBody>
-          <div className="flex gap-2 mb-2">
-            <Input
-              value={path}
-              onChange={(e) => setPath(e.target.value)}
-              placeholder="输入文件完整路径"
-            />
-            <Button onClick={convertPath}>转换</Button>
-          </div>
-          {conversionResult && <p>{conversionResult}</p>}
         </CardBody>
       </Card>
 

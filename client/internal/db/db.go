@@ -32,7 +32,8 @@ func InitDB(dbPath string) (*sql.DB, error) {
         path TEXT,
         filename TEXT,
         size INTEGER,
-        modified_at DATETIME
+        modified_at DATETIME,
+        scan_flag INTEGER DEFAULT 1
     );
 	CREATE TABLE IF NOT EXISTS monitored_directories (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,6 +43,12 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		pattern TEXT NOT NULL UNIQUE
 	);
+	
+	-- 添加索引优化查询性能
+	CREATE INDEX IF NOT EXISTS idx_files_path ON files(path);
+	CREATE INDEX IF NOT EXISTS idx_files_scan_flag ON files(scan_flag);
+	CREATE INDEX IF NOT EXISTS idx_files_modified_at ON files(modified_at);
+	CREATE INDEX IF NOT EXISTS idx_files_size ON files(size);
     `
 	_, err = db.Exec(createTableSQL)
 	if err != nil {

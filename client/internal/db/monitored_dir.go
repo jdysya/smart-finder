@@ -5,6 +5,25 @@ import (
 	"log"
 )
 
+// GetMonitoredDirectories 获取所有监控目录
+func GetMonitoredDirectories(dbConn *sql.DB) ([]string, error) {
+	rows, err := dbConn.Query("SELECT path FROM monitored_directories")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var directories []string
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			return nil, err
+		}
+		directories = append(directories, path)
+	}
+	return directories, nil
+}
+
 func UpdateMonitoredDir(dbConn *sql.DB, path string, action string) {
 	switch action {
 	case "add":

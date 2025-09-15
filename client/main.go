@@ -23,15 +23,12 @@ import (
 	"smart-finder/client/internal/indexer"
 	"smart-finder/client/internal/tray"
 	"smart-finder/client/internal/utils"
-
-	"github.com/fsnotify/fsnotify"
 )
 
 var (
 	monitoredDirs   = make([]string, 0)
 	monitoredDirsMu sync.RWMutex
 	dbConn          *sql.DB
-	watcher         *fsnotify.Watcher
 )
 
 // CORS中间件
@@ -50,6 +47,47 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		next(w, r)
 	}
+}
+
+// 手动触发扫描API
+func scanTriggerHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "只支持POST方法", 405)
+		return
+	}
+	
+	scheduler := indexer.GetGlobalScheduler()
+	if scheduler == nil {
+		http.Error(w, "扫描器未初始化", 500)
+		return
+	}
+	
+	scheduler.TriggerManualScan()
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "triggered",
+		"message": "手动扫描已触发",
+	})
+}
+
+// 扫描状态查询API
+func scanStatusHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "只支持GET方法", 405)
+		return
+	}
+	
+	scheduler := indexer.GetGlobalScheduler()
+	if scheduler == nil {
+		http.Error(w, "扫描器未初始化", 500)
+		return
+	}
+	
+	status := scheduler.GetStatus()
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(status)
 }
 
 //go:embed web/*
@@ -84,8 +122,9 @@ func onExit() {
 	if dbConn != nil {
 		dbConn.Close()
 	}
-	if watcher != nil {
-		watcher.Close()
+	// 停止定时扫描器
+	if indexer.GetGlobalScheduler() != nil {
+		indexer.GetGlobalScheduler().Stop()
 	}
 }
 
@@ -155,52 +194,11 @@ func runApp() {
 		}
 	}
 
-	// 初始化 watcher
-	watcher, err = fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatal("创建文件监控器失败:", err)
-	}
-
-	// 将监控目录及其子目录添加到 watcher
-	monitoredDirsMu.RLock()
-	for _, dir := range monitoredDirs {
-		filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				log.Printf("访问路径 %q 失败: %v\n", path, err)
-				return err
-			}
-			if info.IsDir() {
-				err = watcher.Add(path)
-				if err != nil {
-					log.Printf("添加监控目录 %q 失败: %v\n", path, err)
-				}
-			}
-			return nil
-		})
-	}
-	monitoredDirsMu.RUnlock()
-
-	go func() {
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				log.Println("检测到文件变动:", event)
-				if event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create {
-					indexer.Scanner(dbConn, event.Name)
-				} else if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
-					indexer.RemoveFile(dbConn, event.Name)
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				log.Println("文件监控器错误:", err)
-			}
-		}
-	}()
+	// 初始化定时扫描器 (每30分钟扫描一次)
+	indexer.InitGlobalScheduler(dbConn, 30*time.Minute)
+	
+	// 启动定时扫描器
+	go indexer.GetGlobalScheduler().Start()
 
 	// 静态文件服务（使用 embed.FS）
 	webRoot, _ := fs.Sub(webFS, "web")
@@ -214,6 +212,10 @@ func runApp() {
 	http.HandleFunc("/api/files", filesHandler)
 	http.HandleFunc("/api/md5", corsMiddleware(apiMD5FileHandler))
 	http.HandleFunc("/api/ignore-patterns", ignorePatternsHandler)
+	
+	// 扫描相关API
+	http.HandleFunc("/api/scan/trigger", corsMiddleware(scanTriggerHandler))
+	http.HandleFunc("/api/scan/status", corsMiddleware(scanStatusHandler))
 
 	// md5 文件定位路由
 	http.HandleFunc("/api/locate/md5", corsMiddleware(md5Handler))
@@ -341,21 +343,7 @@ func directoriesHandler(w http.ResponseWriter, r *http.Request) {
 		// 添加到数据库
 		db.UpdateMonitoredDir(dbConn, req.Path, "add")
 
-		// 添加到 watcher
-		filepath.Walk(req.Path, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				log.Printf("访问路径 %q 失败: %v\n", path, err)
-				return err
-			}
-			if info.IsDir() {
-				err = watcher.Add(path)
-				if err != nil {
-					log.Printf("添加监控目录 %q 失败: %v\n", path, err)
-				}
-			}
-			return nil
-		})
-
+		// 触发立即扫描新目录
 		go indexer.Scanner(dbConn, req.Path)
 		w.WriteHeader(201)
 	case "DELETE":
@@ -375,12 +363,6 @@ func directoriesHandler(w http.ResponseWriter, r *http.Request) {
 
 		// 从数据库删除
 		db.UpdateMonitoredDir(dbConn, req.Path, "remove")
-
-		// 从 watcher 中移除
-		err := watcher.Remove(req.Path)
-		if err != nil {
-			log.Println("移除监控目录失败:", err)
-		}
 		w.WriteHeader(204)
 	default:
 		http.Error(w, "不支持的方法", 405)
