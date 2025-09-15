@@ -13,6 +13,11 @@ import (
 	"smart-finder/gateway/internal/templates"
 )
 
+var (
+	// Version will be set during build time
+	Version = "dev"
+)
+
 type Config struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	Server   ServerConfig   `mapstructure:"server"`

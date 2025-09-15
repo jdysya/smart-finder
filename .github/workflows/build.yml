@@ -43,6 +43,20 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Get version
+      id: version
+      shell: bash
+      run: |
+        if [ "${{ github.event_name }}" = "release" ]; then
+          VERSION="${{ github.event.release.tag_name }}"
+        else
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev-$(git rev-parse --short HEAD)")
+        fi
+        # Remove 'v' prefix if present
+        VERSION=${VERSION#v}
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Version: ${VERSION}"
+
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
@@ -96,6 +110,7 @@ jobs:
         PLATFORM: ${{ matrix.platform }}
         ARCH: ${{ matrix.arch }}
         EXT: ${{ matrix.ext }}
+        VERSION: ${{ steps.version.outputs.version }}
       run: |
         ./scripts/ci-build-client.sh
 
@@ -136,6 +151,20 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Get version
+      id: version
+      shell: bash
+      run: |
+        if [ "${{ github.event_name }}" = "release" ]; then
+          VERSION="${{ github.event.release.tag_name }}"
+        else
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev-$(git rev-parse --short HEAD)")
+        fi
+        # Remove 'v' prefix if present
+        VERSION=${VERSION#v}
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Version: ${VERSION}"
+
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
@@ -166,15 +195,16 @@ jobs:
         GOARCH: ${{ matrix.arch }}
         CGO_ENABLED: ${{ env.CGO_ENABLED }}
         GOAMD64: v1
+        VERSION: ${{ steps.version.outputs.version }}
       run: |
         cd gateway
-        go build -ldflags="-s -w -extldflags=-static" -tags="osusergo,netgo" -o "smart-finder-gateway-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}" .
+        go build -ldflags="-s -w -extldflags=-static -X main.Version=${{ steps.version.outputs.version }}" -tags="osusergo,netgo" -o "smart-finder-gateway-${{ steps.version.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}" .
 
     - name: Upload Gateway Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: gateway-${{ matrix.platform }}-${{ matrix.arch }}
-        path: gateway/smart-finder-gateway-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}
+        name: gateway-${{ steps.version.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}
+        path: gateway/smart-finder-gateway-${{ steps.version.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}
 
   create-release:
     name: Create Release

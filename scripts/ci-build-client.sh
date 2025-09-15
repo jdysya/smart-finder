@@ -1,16 +1,19 @@
 #!/bin/bash
 set -e
 
+# Get version from environment variable, fallback to default if not set
+VERSION=${VERSION:-"dev"}
+
 if [[ "$RUNNER_OS" == "Windows" ]]; then
   export CGO_ENABLED=1
   GOARCH=amd64 go run github.com/tc-hib/go-winres@latest simply --icon client/internal/icon/icon.png --out client/winres.syso --arch ${ARCH}
   cd client
-  go build -ldflags="-s -w -H=windowsgui" -tags="osusergo,netgo" -o "smart-finder-client-${PLATFORM}-${ARCH}${EXT}" .
+  go build -ldflags="-s -w -H=windowsgui -X main.Version=${VERSION}" -tags="osusergo,netgo" -o "smart-finder-client-${VERSION}-${PLATFORM}-${ARCH}${EXT}" .
   cd ..
-  ZIP_NAME="smart-finder-client-${PLATFORM}-${ARCH}.zip"
-  powershell -Command "Compress-Archive -Path \"client/smart-finder-client-${PLATFORM}-${ARCH}${EXT}\" -DestinationPath \"client/${ZIP_NAME}\" -Force"
+  ZIP_NAME="smart-finder-client-${VERSION}-${PLATFORM}-${ARCH}.zip"
+  powershell -Command "Compress-Archive -Path \"client/smart-finder-client-${VERSION}-${PLATFORM}-${ARCH}${EXT}\" -DestinationPath \"client/${ZIP_NAME}\" -Force"
   if [[ -n "$GITHUB_OUTPUT" ]]; then
-    echo "artifact_name=client-${PLATFORM}-${ARCH}-zip" >> $GITHUB_OUTPUT
+    echo "artifact_name=client-${VERSION}-${PLATFORM}-${ARCH}-zip" >> $GITHUB_OUTPUT
     echo "artifact_path=client/${ZIP_NAME}" >> $GITHUB_OUTPUT
   else
     echo "Created artifact: client/${ZIP_NAME}"
@@ -44,7 +47,7 @@ elif [[ "$RUNNER_OS" == "macOS" ]]; then
   sips -z 1024 1024 "$CLEAN_ICON_PATH" --out "$ICONSET_DIR/icon_512x512@2x.png"
   iconutil -c icns "$ICONSET_DIR" -o "$APP_BUNDLE_PATH/Contents/Resources/icon.icns"
   cd client
-  go build -ldflags="-s -w" -o "../$APP_BUNDLE_PATH/Contents/MacOS/$BINARY_NAME" .
+  go build -ldflags="-s -w -X main.Version=${VERSION}" -o "../$APP_BUNDLE_PATH/Contents/MacOS/$BINARY_NAME" .
   cd ..
   PLIST_PATH="$APP_BUNDLE_PATH/Contents/Info.plist"
   cat > "$PLIST_PATH" << EOL
@@ -63,9 +66,9 @@ elif [[ "$RUNNER_OS" == "macOS" ]]; then
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleVersion</key>
-    <string>1.0</string>
+    <string>${VERSION}</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>${VERSION}</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>LSUIElement</key>
@@ -75,10 +78,10 @@ elif [[ "$RUNNER_OS" == "macOS" ]]; then
 EOL
 
   codesign --force --deep --sign - "$APP_BUNDLE_PATH"
-  DMG_NAME="smart-finder-client-${PLATFORM}-${ARCH}.dmg"
+  DMG_NAME="smart-finder-client-${VERSION}-${PLATFORM}-${ARCH}.dmg"
   hdiutil create -volname "$APP_NAME" -srcfolder "$APP_BUNDLE_PATH" -ov -format UDZO "$DIST_DIR/$DMG_NAME"
   if [[ -n "$GITHUB_OUTPUT" ]]; then
-    echo "artifact_name=client-${PLATFORM}-${ARCH}-dmg" >> $GITHUB_OUTPUT
+    echo "artifact_name=client-${VERSION}-${PLATFORM}-${ARCH}-dmg" >> $GITHUB_OUTPUT
     echo "artifact_path=$DIST_DIR/$DMG_NAME" >> $GITHUB_OUTPUT
   else
     echo "Created artifact: $DIST_DIR/$DMG_NAME"

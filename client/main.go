@@ -26,6 +26,9 @@ import (
 )
 
 var (
+	// Version will be set during build time
+	Version = "dev"
+	
 	monitoredDirs   = make([]string, 0)
 	monitoredDirsMu sync.RWMutex
 	dbConn          *sql.DB
