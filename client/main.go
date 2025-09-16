@@ -28,7 +28,7 @@ import (
 var (
 	// Version will be set during build time
 	Version = "dev"
-	
+
 	monitoredDirs   = make([]string, 0)
 	monitoredDirsMu sync.RWMutex
 	dbConn          *sql.DB
@@ -58,18 +58,18 @@ func scanTriggerHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "只支持POST方法", 405)
 		return
 	}
-	
+
 	scheduler := indexer.GetGlobalScheduler()
 	if scheduler == nil {
 		http.Error(w, "扫描器未初始化", 500)
 		return
 	}
-	
+
 	scheduler.TriggerManualScan()
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"status": "triggered",
+		"status":  "triggered",
 		"message": "手动扫描已触发",
 	})
 }
@@ -80,15 +80,15 @@ func scanStatusHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "只支持GET方法", 405)
 		return
 	}
-	
+
 	scheduler := indexer.GetGlobalScheduler()
 	if scheduler == nil {
 		http.Error(w, "扫描器未初始化", 500)
 		return
 	}
-	
+
 	status := scheduler.GetStatus()
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(status)
 }
@@ -155,6 +155,119 @@ func getAppDataPath() (string, error) {
 	return appDataPath, nil
 }
 
+// 批量根据MD5删除文件并移至回收站API
+func batchDeleteFilesByMD5Handler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "只支持POST方法", 405)
+		return
+	}
+
+	var requestBody struct {
+		MD5s []string `json:"md5s"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+		http.Error(w, "参数错误，无效的JSON格式", 400)
+		return
+	}
+
+	if len(requestBody.MD5s) == 0 {
+		http.Error(w, "参数错误，MD5数组不能为空", 400)
+		return
+	}
+
+	// 验证所有MD5格式是否正确
+	for _, md5 := range requestBody.MD5s {
+		if len(md5) != 32 {
+			http.Error(w, fmt.Sprintf("参数错误，无效的MD5格式: %s", md5), 400)
+			return
+		}
+	}
+
+	// 处理每个MD5
+	results := make([]map[string]interface{}, 0)
+	for _, md5 := range requestBody.MD5s {
+		result := map[string]interface{}{
+			"md5": md5,
+		}
+
+		// 从数据库查询文件路径
+		var filePath, fileName string
+		err := dbConn.QueryRow("SELECT path, filename FROM files WHERE md5 = ?", md5).Scan(&filePath, &fileName)
+		if err == sql.ErrNoRows {
+			result["status"] = "failed"
+			result["message"] = "未找到对应文件"
+			results = append(results, result)
+			continue
+		} else if err != nil {
+			result["status"] = "failed"
+			result["message"] = "数据库查询错误"
+			results = append(results, result)
+			continue
+		}
+
+		// 检查文件是否存在
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			// 文件不存在，但仍从数据库中删除记录
+			_, dbErr := dbConn.Exec("DELETE FROM files WHERE md5 = ?", md5)
+			if dbErr != nil {
+				result["status"] = "failed"
+				result["message"] = "文件不存在且数据库删除失败"
+				results = append(results, result)
+				continue
+			}
+			result["status"] = "warning"
+			result["message"] = "文件不存在但已从数据库中删除记录"
+			results = append(results, result)
+			continue
+		}
+
+		// 在文件所在目录创建回收站
+		fileDir := filepath.Dir(filePath)
+		recycleBinPath := filepath.Join(fileDir, "回收站")
+		if err := os.MkdirAll(recycleBinPath, 0755); err != nil {
+			result["status"] = "failed"
+			result["message"] = "创建回收站目录失败"
+			results = append(results, result)
+			continue
+		}
+
+		// 生成目标路径（在回收站中）
+		timestamp := time.Now().UnixNano() / int64(time.Millisecond)
+		targetFileName := fmt.Sprintf("%s_%d_%s", strings.TrimSuffix(fileName, filepath.Ext(fileName)), timestamp, filepath.Ext(fileName))
+		targetPath := filepath.Join(recycleBinPath, targetFileName)
+
+		// 移动文件到回收站
+		if err := os.Rename(filePath, targetPath); err != nil {
+			result["status"] = "failed"
+			result["message"] = fmt.Sprintf("移动文件到回收站失败: %v", err)
+			results = append(results, result)
+			continue
+		}
+
+		// 从数据库中删除记录
+		_, err = dbConn.Exec("DELETE FROM files WHERE md5 = ?", md5)
+		if err != nil {
+			result["status"] = "partial_success"
+			result["message"] = "文件已移动到回收站，但数据库记录删除失败"
+			results = append(results, result)
+			continue
+		}
+
+		result["status"] = "success"
+		result["message"] = "文件已成功删除并移至回收站"
+		result["originalPath"] = filePath
+		result["recyclePath"] = targetPath
+		results = append(results, result)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"total":   len(requestBody.MD5s),
+		"results": results,
+	})
+}
+
 func runApp() {
 	appDataPath, err := getAppDataPath()
 	if err != nil {
@@ -199,7 +312,7 @@ func runApp() {
 
 	// 初始化定时扫描器 (每30分钟扫描一次)
 	indexer.InitGlobalScheduler(dbConn, 30*time.Minute)
-	
+
 	// 启动定时扫描器
 	go indexer.GetGlobalScheduler().Start()
 
@@ -215,13 +328,16 @@ func runApp() {
 	http.HandleFunc("/api/files", filesHandler)
 	http.HandleFunc("/api/md5", corsMiddleware(apiMD5FileHandler))
 	http.HandleFunc("/api/ignore-patterns", ignorePatternsHandler)
-	
+
 	// 扫描相关API
 	http.HandleFunc("/api/scan/trigger", corsMiddleware(scanTriggerHandler))
 	http.HandleFunc("/api/scan/status", corsMiddleware(scanStatusHandler))
 
 	// md5 文件定位路由
 	http.HandleFunc("/api/locate/md5", corsMiddleware(md5Handler))
+
+	// 新增：批量根据MD5删除文件并移至回收站API
+	http.HandleFunc("/api/files/delete", corsMiddleware(batchDeleteFilesByMD5Handler))
 
 	port := 8964
 	log.Printf("服务启动: http://127.0.0.1:%d\n", port)
